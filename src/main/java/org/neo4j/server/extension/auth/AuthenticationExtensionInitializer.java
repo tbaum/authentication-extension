@@ -19,30 +19,26 @@
  */
 package org.neo4j.server.extension.auth;
 
+import java.util.Arrays;
+import java.util.Collection;
+
 import org.apache.commons.configuration.Configuration;
 import org.neo4j.graphdb.GraphDatabaseService;
 import org.neo4j.kernel.GraphDatabaseAPI;
 import org.neo4j.server.AbstractNeoServer;
 import org.neo4j.server.NeoServer;
 import org.neo4j.server.configuration.Configurator;
-import org.neo4j.server.configuration.ThirdPartyJaxRsPackage;
 import org.neo4j.server.database.Database;
 import org.neo4j.server.logging.Logger;
 import org.neo4j.server.plugins.Injectable;
 import org.neo4j.server.plugins.SPIPluginLifecycle;
 import org.neo4j.server.web.WebServer;
 
-import java.util.Arrays;
-import java.util.Collection;
-
-import static org.neo4j.server.plugins.TypedInjectable.injectable;
-
 public class AuthenticationExtensionInitializer implements SPIPluginLifecycle {
     private static final Logger LOG = new Logger(AuthenticationExtensionInitializer.class);
     private AuthenticationFilter adminAuthenticationFilter;
     private AuthenticationFilter authenticationFilter;
     private WebServer webServer;
-    private String adminPath;
 
     @Override
     public Collection<Injectable<?>> start(final GraphDatabaseService graphDatabaseService, final Configuration config) {
@@ -51,9 +47,6 @@ public class AuthenticationExtensionInitializer implements SPIPluginLifecycle {
 
     @Override
     public void stop() {
-        if (adminAuthenticationFilter != null) {
-            webServer.removeFilter(adminAuthenticationFilter, adminPath);
-        }
         if (authenticationFilter != null) {
             webServer.removeFilter(authenticationFilter, "/*");
         }
@@ -75,17 +68,12 @@ public class AuthenticationExtensionInitializer implements SPIPluginLifecycle {
         final SingleUserAuthenticationService adminAuth = new SingleUserAuthenticationService(masterCredendials);
         Database database = neoServer.getDatabase();
         GraphDatabaseAPI graphDatabaseAPI = database.getGraph();
-        final MultipleAuthenticationService users = new MultipleAuthenticationService(graphDatabaseAPI,
-                graphDatabaseAPI.getNodeManager());
 
-        adminAuthenticationFilter = new AuthenticationFilter("neo4j-admin", adminAuth);
-        adminPath = getMyMountpoint(configurator) + "/*";
-        webServer.addFilter(adminAuthenticationFilter, adminPath);
 
-        authenticationFilter = new AuthenticationFilter("neo4j graphdb", users, adminAuth);
+        authenticationFilter = new AuthenticationFilter("neo4j graphdb", adminAuth);
         webServer.addFilter(authenticationFilter, "/*");
 
-        return Arrays.<Injectable<?>>asList(injectable(users));
+        return Arrays.<Injectable<?>>asList();
     }
 
     private WebServer getWebServer(final NeoServer neoServer) {
@@ -95,14 +83,5 @@ public class AuthenticationExtensionInitializer implements SPIPluginLifecycle {
         throw new IllegalArgumentException("expected AbstractNeoServer");
     }
 
-    private String getMyMountpoint(final Configurator configurator) {
-        final String packageName = getClass().getPackage().getName();
 
-        for (ThirdPartyJaxRsPackage o : configurator.getThirdpartyJaxRsClasses()) {
-            if (o.getPackageName().equals(packageName)) {
-                return o.getMountPoint();
-            }
-        }
-        throw new RuntimeException("unable to resolve our mountpoint?");
-    }
 }

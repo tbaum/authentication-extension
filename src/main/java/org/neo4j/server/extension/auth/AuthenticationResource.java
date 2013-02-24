@@ -19,52 +19,22 @@
  */
 package org.neo4j.server.extension.auth;
 
-import org.codehaus.jackson.map.ObjectMapper;
-
-import javax.ws.rs.*;
-import javax.ws.rs.core.Context;
+import javax.ws.rs.GET;
+import javax.ws.rs.Path;
 import javax.ws.rs.core.Response;
-
 import java.io.IOException;
 
-import static javax.ws.rs.core.Response.Status.OK;
-import static org.neo4j.server.extension.auth.MultipleAuthenticationService.Permission.*;
+import static javax.ws.rs.core.Response.Status.FORBIDDEN;
 
 @Path("/")
 public class AuthenticationResource {
 
-    private final static ObjectMapper mapper = new ObjectMapper();
-    private final MultipleAuthenticationService users;
-
-    public AuthenticationResource(@Context MultipleAuthenticationService users) {
-        this.users = users;
+    public AuthenticationResource() {
     }
 
-    @GET @Path("/list")
+    @GET @Path("/")
     public Response listUsers() throws IOException {
-        final String result = mapper.writeValueAsString(users.getUsers());
-        return Response.status(OK).entity(result).build();
+        return Response.status(FORBIDDEN).entity("").build();
     }
 
-    @POST @Path("/add-user-ro")
-    public Response addUserRo(@FormParam("user") String user) {
-        if (user == null) throw new IllegalArgumentException("missing parameter 'user'");
-        users.setPermissionForUser(user, RO);
-        return Response.status(OK).entity("OK").build();
-    }
-
-    @POST @Path("/add-user-rw")
-    public Response addUserRw(@FormParam("user") String user) {
-        if (user == null) throw new IllegalArgumentException("missing parameter 'user'");
-        users.setPermissionForUser(user, RW);
-        return Response.status(OK).entity("OK").build();
-
-    }
-
-    @POST @Path("/remove-user")
-    public Response removeUser(@FormParam("user") String user) {
-        if (user == null) throw new IllegalArgumentException("missing parameter 'user'");
-        users.setPermissionForUser(user, NONE);
-        return Response.status(OK).entity("OK").build();
-    }
 }

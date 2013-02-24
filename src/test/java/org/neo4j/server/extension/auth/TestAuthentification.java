@@ -19,11 +19,11 @@
  */
 package org.neo4j.server.extension.auth;
 
+import java.io.IOException;
+
 import com.sun.jersey.api.client.Client;
-import com.sun.jersey.api.client.ClientResponse;
 import com.sun.jersey.api.client.UniformInterfaceException;
 import com.sun.jersey.api.client.filter.HTTPBasicAuthFilter;
-import com.sun.jersey.core.util.MultivaluedMapImpl;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
@@ -31,11 +31,6 @@ import org.neo4j.server.WrappingNeoServerBootstrapper;
 import org.neo4j.server.configuration.ServerConfigurator;
 import org.neo4j.server.configuration.ThirdPartyJaxRsPackage;
 import org.neo4j.test.ImpermanentGraphDatabase;
-
-import javax.ws.rs.core.MediaType;
-import javax.ws.rs.core.MultivaluedMap;
-import java.io.File;
-import java.io.IOException;
 
 import static junit.framework.Assert.assertEquals;
 import static junit.framework.Assert.fail;
@@ -45,18 +40,17 @@ import static junit.framework.Assert.fail;
  * @since 31.05.11 21:11
  */
 public class TestAuthentification {
-    private WrappingNeoServerBootstrapper testBootstrapper;
     private final Client client = createClient();
-
-    private Client createClient() {
-        return Client.create();
-    }
-
-    private ClientResponse response;
     private final Client adminClient = createClient();
 
     {
         adminClient.addFilter(new HTTPBasicAuthFilter("neo4j", "master"));
+    }
+
+    private WrappingNeoServerBootstrapper testBootstrapper;
+
+    private Client createClient() {
+        return Client.create();
     }
 
     @Before
@@ -71,40 +65,9 @@ public class TestAuthentification {
         testBootstrapper.start();
     }
 
-
     @After
     public void tearDown() {
-        if (response!=null) response.close();
         testBootstrapper.stop();
-    }
-
-    private void delete(final File dir) {
-        dir.deleteOnExit();
-        for (File file : dir.listFiles()) {
-            if (file.isDirectory()) {
-                delete(file);
-            } else {
-                file.deleteOnExit();
-            }
-        }
-    }
-
-    @Test
-    public void listNoUsers() throws Exception {
-        response = adminClient.resource("http://localhost:7474/admin/list").accept(MediaType.APPLICATION_JSON_TYPE).get(ClientResponse.class);
-        assertEquals(200, response.getStatus());
-        final String content = response.getEntity(String.class);
-        assertEquals("{}", content);
-    }
-
-    @Test
-    public void listAddedUsers() throws Exception {
-        addUser("test-rw","pass",true);
-        addUser("test-ro","pass",false);
-        response = adminClient.resource("http://localhost:7474/admin/list").accept(MediaType.APPLICATION_JSON_TYPE).get(ClientResponse.class);
-        assertEquals(200, response.getStatus());
-        final String content = response.getEntity(String.class);
-        assertEquals("{\"test-ro:pass\":\"RO\",\"test-rw:pass\":\"RW\"}", content);
     }
 
     @Test public void expecting401() throws IOException, InterruptedException {
@@ -153,86 +116,4 @@ public class TestAuthentification {
         }
     }
 
-    private String addUser(final String user, String pass, boolean rw) {
-        MultivaluedMap<String, String> formData = new MultivaluedMapImpl();
-        formData.add("user", user+":"+pass);
-        return adminClient.resource("http://localhost:7474/admin/add-user-"+(rw?"rw":"ro")).post(String.class, formData);
-    }
-
-    private String removeUser(final String user, String pass) {
-        MultivaluedMap<String, String> formData = new MultivaluedMapImpl();
-        formData.add("user", user+":"+pass);
-        return adminClient.resource("http://localhost:7474/admin/remove-user").post(String.class, formData);
-    }
-
-    @Test public void addRoAndRemoveUserTest() throws IOException, InterruptedException {
-        
-        assertEquals("OK", addUser("test","pass",false));
-
-        Client client = createClient();
-        client.addFilter(new HTTPBasicAuthFilter("test", "pass"));
-
-        client.resource("http://localhost:7474/").accept("application/json").get(String.class);
-        client.resource("http://localhost:7474/db/data").get(String.class);
-
-        try {
-            client.resource("http://localhost:7474/db/data/node").post(String.class);
-            fail();
-        } catch (UniformInterfaceException e) {
-            assertEquals("expecting responsecode 401", 401, e.getResponse().getStatus());
-        }
-
-        assertEquals("OK", removeUser("test","pass"));
-
-        try {
-            client.resource("http://localhost:7474/db/data/node").get(String.class);
-            fail();
-        } catch (UniformInterfaceException e) {
-            assertEquals("expecting responsecode 401", 401, e.getResponse().getStatus());
-        }
-
-        try {
-            client.resource("http://localhost:7474/db/data").get(String.class);
-            fail();
-        } catch (UniformInterfaceException e) {
-            assertEquals("expecting responsecode 401", 401, e.getResponse().getStatus());
-        }
-    }
-
-    @Test public void addRwAndRemoveUserTest() throws IOException, InterruptedException {
-        Client adminClient = createClient();
-        adminClient.addFilter(new HTTPBasicAuthFilter("neo4j", "master"));
-
-        MultivaluedMap<String, String> formData = new MultivaluedMapImpl();
-        formData.add("user", "test:pass");
-
-        assertEquals("OK", adminClient.resource("http://localhost:7474/admin/add-user-rw").post(String.class, formData));
-
-
-        Client client = createClient();
-        client.addFilter(new HTTPBasicAuthFilter("test", "pass"));
-
-        client.resource("http://localhost:7474/").accept("application/json").get(String.class);
-        client.resource("http://localhost:7474/db/data").get(String.class);
-
-        client.resource("http://localhost:7474/db/data/node").post(String.class);
-
-
-        assertEquals("OK", adminClient.resource("http://localhost:7474/admin/remove-user").post(String.class, formData));
-
-
-        try {
-            client.resource("http://localhost:7474/").get(String.class);
-            fail();
-        } catch (UniformInterfaceException e) {
-            assertEquals("expecting responsecode 401", 401, e.getResponse().getStatus());
-        }
-
-        try {
-            client.resource("http://localhost:7474/db/data").get(String.class);
-            fail();
-        } catch (UniformInterfaceException e) {
-            assertEquals("expecting responsecode 401", 401, e.getResponse().getStatus());
-        }
-    }
 }
